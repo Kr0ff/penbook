@@ -319,13 +319,38 @@ PS: > ConvertTo-NTHash -Password $decodedpwd.SecureCurrentPassword
 
 That NTLM hash can then be used to get a ticket (Rubeus/Mimikatz) and pass it in the current session.
 
+## AdminSDHolder
 
+AdminSDHolder is a special container in Active Directory which can provide administrative privileges over a user object. Since this container is available in a domain environment, it can be abused to establish persistence.&#x20;
 
+If a malicious user has obtained domain admin privileges and have previously compromised a low-privileged or an alternative account, they could add that (non-admin) account to the AdminSDHolder container by modifying the ACL to elevate the non-admin account to Domain Admin.
 
+There is a scheduled task which automatically runs every hour to check against any changes in the AdminSDHolder container. If there's a change, the task updates the privileges (or ACL) of the target user and assigns Administrator privileges in the specific domain.
 
+For example:
 
+1. Malicious user compromised user (`Jack`) - part of Domain Users
+2. Malicious user obtained Domain Admin rights by compromising user (`dadmin`).
+3. Malicious user uses account `dadmin` to modify the AdminSDHolder container to add user `Jack`to it using the following command:
 
+```powershell
+Import-Module .\PowerSploit.ps1
+Add-DomainObjectAcl -TargetIdentity “CN=AdminSDHolder,CN=System, DC=domain,DC=local” -PrincipalIdentity Jack -Rights All
+```
 
+4. After 60 minutes, the privileges will be updated automatically, elevating user `Jack`to have administrator privileges in the domain `domain.local`.
+
+The 60 minute time can be skipped if this is a preferred route for the operator which can be done via LDAP by modifying the domain DN attributes:
+
+Modify the DN attribute `RunProtectedAdminGroupsTask`.
+
+Some references:
+
+{% embed url="https://www.ired.team/offensive-security-experiments/active-directory-kerberos-abuse/how-to-abuse-and-backdoor-adminsdholder-to-obtain-domain-admin-persistence" %}
+
+{% embed url="https://www.pwndefend.com/2021/09/11/abusing-adminsdholder-to-enable-a-domain-backdoor/" %}
+
+{% embed url="https://adsecurity.org/?p=1906" %}
 
 
 
