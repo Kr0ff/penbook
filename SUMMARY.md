@@ -7,3 +7,7 @@
 * [PowerShell](offsec/powershell.md)
 * [Active Directory](offsec/active-directory.md)
 * [EDR / AV Evasion](offsec/edr-av-evasion.md)
+
+***
+
+* [DLL Sideloading](dll-sideloading.md)
