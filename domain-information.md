@@ -19,3 +19,17 @@ Automated checking systems can alert on things such as:
 
 When a defense system is triggered, connection will likely be dropped or at least the necessary defense team will be alerted of connections made to unreputable domains.
 
+Domains checks such as categorization and reputation can be done via some of the following links (**list is not extensive**) :&#x20;
+
+* [https://www.spamhaus.org/domain-reputation/](https://www.spamhaus.org/domain-reputation/)
+* [https://www.talosintelligence.com/reputation\_center](https://www.talosintelligence.com/reputation_center)
+* [https://mxtoolbox.com/domain](https://mxtoolbox.com/domain)
+* [https://check.spamhaus.org/](https://check.spamhaus.org/)
+* [https://website-categorization.whoisxmlapi.com/lookup](https://website-categorization.whoisxmlapi.com/lookup)
+* [https://www.safedns.com/features#id-check-categorization](https://www.safedns.com/features#id-check-categorization) (no result = no categorization)
+* [https://sitereview.bluecoat.com/#/](https://sitereview.bluecoat.com/#/)
+* [https://phishtank.org/](https://phishtank.org/)
+* [https://www.virustotal.com/](https://www.virustotal.com/)
+* [https://phishtank.org/](https://phishtank.org/)
+* [https://web.archive.org/](https://web.archive.org/) - Try to find what the domain hosted in the past
+* [https://www.fortiguard.com/webfilter](https://www.fortiguard.com/webfilter)
